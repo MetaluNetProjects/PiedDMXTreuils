@@ -173,8 +173,8 @@ void sendMotorState()
 	buf[len++] = DCMOTOR_GETPOS(A) & 255;
 	buf[len++] = digitalRead(MOTA_END) == MOTA_ENDLEVEL;
 	buf[len++] = 0;//digitalRead(TRANS_HISW) == TRANS_SWLEVEL;
-	buf[len++] = DCMOTOR(A).Vars.PWMConsign >> 8;
-	buf[len++] = DCMOTOR(A).Vars.PWMConsign & 255;
+	buf[len++] = DCMOTOR(A).Vars.PWMFinal >> 8;
+	buf[len++] = DCMOTOR(A).Vars.PWMFinal & 255;
 	ramppos = (int)rampGetPos(&(DCMOTOR(A).PosRamp));
 	buf[len++] = ramppos >> 8;
 	buf[len++] = ramppos & 255;
