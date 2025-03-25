@@ -27,7 +27,6 @@ unsigned char dmxBuf[DMX_CHAN_COUNT];
 //DmxSlave dmx;
 
 DmxInput dmxInput;
-uint16_t dmxStartChannel = 1;
 
 bool button, button_last;
 int button_count;
@@ -37,10 +36,10 @@ void send_dest(int mot, int dest) {
     char buf[5] = {120, 0, 10};
     buf[3] = dest >> 8;
     buf[4] = dest & 255;
-    fraise_master_sendbytes(50 + mot, buf, sizeof(buf));
-    /*printf("dest %d %d: %02X %02X %02X %02X %02X %02X \n", 50 + mot, dest,
+    fraise_master_sendbytes(49 + mot, buf, sizeof(buf));
+    /*printf("dest %d %d: %02X %02X %02X %02X %02X %02X \n", 49 + mot, dest,
         buf[0], buf[1], buf[2], buf[3], buf[4]);*/
-    printf("dest %d %d\n", 50 + mot, dest);
+    printf("dest %d %d\n", 49 + mot, dest);
 }
 
 void send_pwm(int mot, int pwm) {
@@ -51,10 +50,10 @@ void send_pwm(int mot, int pwm) {
     char buf[4] = {120, 4};
     buf[2] = pwm >> 8;
     buf[3] = pwm & 255;
-    fraise_master_sendbytes(50 + mot, buf, sizeof(buf));
-    /*printf("dest %d %d: %02X %02X %02X %02X %02X %02X \n", 50 + mot, dest,
+    fraise_master_sendbytes(49 + mot, buf, sizeof(buf));
+    /*printf("dest %d %d: %02X %02X %02X %02X %02X %02X \n", 49 + mot, dest,
         buf[0], buf[1], buf[2], buf[3], buf[4]);*/
-    printf("pwm %d %d %d %d\n", 50 + mot, pwm, buf[2], buf[3]); // -1023 = FC01
+    printf("pwm %d %d %d %d\n", 49 + mot, pwm, buf[2], buf[3]); // -1023 = FC01
 }
 
 class Perche {
@@ -70,7 +69,7 @@ class Perche {
     public:
     static const int NB_CHANS = 4;
     static const int POSITION_MAX = 6 * 250 / 0.15; // 6 meters, 250 step/tour, 15 cm/tour
-    static const int SPEED_MAX = 100;
+    static const int SPEED_MAX = 250;
     Perche(std::vector<uint8_t> motors, uint16_t channel): channel(channel), motors(motors) {}
 
     void set_destination(int32_t dest) {
@@ -85,10 +84,10 @@ class Perche {
 
     void parse_dmx() {
         static const int deadzone = 55;
-        uint8_t dmx_dest    = dmxBuf[dmxStartChannel + channel + 0];
-        uint8_t dmx_speed   = dmxBuf[dmxStartChannel + channel + 1];
-        int dmx_rewind      = MAX(dmxBuf[dmxStartChannel + channel + 2] - deadzone, 0);
-        int dmx_fastfw      = MAX(dmxBuf[dmxStartChannel + channel + 3] - deadzone, 0);
+        uint8_t dmx_dest    = dmxBuf[config.dmx_start + channel + 0];
+        uint8_t dmx_speed   = dmxBuf[config.dmx_start + channel + 1];
+        int dmx_rewind      = MAX(dmxBuf[config.dmx_start + channel + 2] - deadzone, 0);
+        int dmx_fastfw      = MAX(dmxBuf[config.dmx_start + channel + 3] - deadzone, 0);
         if(dmx_rewind > 0 || dmx_fastfw > 0) {
             int pwm = ((dmx_fastfw - dmx_rewind) * 1023) / (255 - deadzone);
             for(auto m: motors) send_pwm(m, pwm);
@@ -105,7 +104,7 @@ class Perche {
     }
 
     void update() {
-        parse_dmx();
+        //parse_dmx();
         if(!running || !speed) return;
         if(position < destination) {
             position += speed;
@@ -123,16 +122,21 @@ class Perche {
     }
 };
 
-Perche pA({0, 1}, 0);
+/*Perche pA({0, 1}, 0);
 Perche pB({2, 3}, Perche::NB_CHANS);
-Perche pC({/*4, */5}, Perche::NB_CHANS * 2);
+Perche pC({5}, Perche::NB_CHANS * 2);*/
 
-std::vector<Perche*> perches{&pA, &pB, &pC};
+Perche pA({1, 3}, 0);
+Perche pB({2, 4}, Perche::NB_CHANS);
+//Perche pC({/*4, */5}, Perche::NB_CHANS * 2);
+
+std::vector<Perche*> perches{&pA, &pB};
 
 void __isr dmxDataRecevied(DmxInput* instance) {
      // A DMX frame has been received :-)
      // Toggle some LED, depending on which pin the data arrived
      gpio_put(LED_PIN, !gpio_get(LED_PIN));
+     for(auto p: perches) p->parse_dmx();
 }
 
 void setup() {

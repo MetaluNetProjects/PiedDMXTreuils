@@ -25,7 +25,7 @@
 #X obj 94 146 tgl 20 0 empty empty empty 0 -10 0 12 #fcfcfc #000000 #000000 0 1;
 #X floatatom 193 194 5 0 0 0 - - - 0;
 #X obj 15 180 spigot 1, f 9;
-#X obj 13 36 fruit/fruit 1 DMX1 \$1 dmxFW;
+#X obj 13 36 fruit/fruit 1 DMX1 \$1 dmxFW 1;
 #X connect 0 0 2 0;
 #X connect 0 0 20 0;
 #X connect 1 0 25 0;
