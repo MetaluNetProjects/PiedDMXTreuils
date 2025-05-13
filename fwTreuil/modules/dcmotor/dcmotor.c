@@ -124,6 +124,7 @@ void dcmotorInput(t_dcmotor *mot)
 {
 	unsigned char c,c2;
 	unsigned int i = 0;
+	long int l = 0;
 
 	c=fraiseGetChar();
 	if(c == 254) {
@@ -150,10 +151,10 @@ void dcmotorInput(t_dcmotor *mot)
 				rampSetPos(&mot->PosRamp,0);
 			}
 			break;
-		PARAM_INT(7, i); // set pos while moving
+		PARAM_LONG(7, l); // set pos while moving
 			mot->VolVars.homed = 1;
-			mot->VolVars.Position = i;
-			rampSetPosMoving(&mot->PosRamp,i);
+			mot->VolVars.Position = l << RAMP_TO_POS_POW;
+			rampSetPos(&mot->PosRamp,l);
 			break;
 	}
 }

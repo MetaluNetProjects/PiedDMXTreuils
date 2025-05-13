@@ -115,53 +115,6 @@ void setup(void) {
 	IPR1bits.TMR1IP=1;
 }
 
-
-void testTransEnds()
-{
-/*	if((digitalRead(TRANS_HISW) == TRANS_SWLEVEL) && (DCMOTOR(A).Vars.PWMConsign > 0)) {
-		DCMOTOR(A).Vars.PWMConsign = 0;
-		DCMOTOR(A).Setting.Mode = 0;
-	}
-		
-	if((digitalRead(TRANS_LOSW) == TRANS_SWLEVEL) && (DCMOTOR(A).Vars.PWMConsign < 0)) {
-		DCMOTOR(A).Vars.PWMConsign = 0;
-		DCMOTOR(A).Setting.Mode = 0;
-	}
-*/
-	/*if((DCMOTOR(A).Setting.Mode != 0) && 
-		((digitalRead(TRANS_HISW) == TRANS_SWLEVEL) || (digitalRead(TRANS_LOSW) == TRANS_SWLEVEL))
-	) {
-		DCMOTOR(A).Vars.PWMConsign = 0;
-		DCMOTOR(A).Setting.Mode = 0;
-	}*/
-
-#if 0
-	if((state == STATE_RUNNING) 
-	&& (digitalRead(TRANS_HISW) == TRANS_SWLEVEL)
-	&& (mode == MODE_AUTO)) {
-		state = STATE_HOMING;
-		DCMOTOR(A).Vars.PWMConsign = 0; // stop rotation
-		DCMOTOR(A).Setting.Mode = 0;
-		DCMOTOR(B).Vars.PWMConsign = transHomePWM;
-		DCMOTOR(B).Setting.Mode = 0;
-	}
-		
-	if((state == STATE_HOMING) 
-	/*&& (DCMOTOR(A).VolVars.homed == 1) */
-	&& (digitalRead(TRANS_LOSW) == TRANS_SWLEVEL)) {
-		state = STATE_RUNNING;
-		DCMOTOR(A).VolVars.Position = 0;
-		DCMOTOR(B).VolVars.Position = 0;
-		//rampSetPos(&(DCMOTOR(B).PosRamp), 0);
-		DCMOTOR(A).VolVars.homed = 1;
-		DCMOTOR(B).VolVars.homed = 1;
-		/*DCMOTOR(A).Vars.SpeedConsign = speed>>SPEED_FILTER; 
-		DCMOTOR(A).Setting.Mode = 1;*/
-	}
-#endif
-}
-	
-
 void sendMotorState()
 {
 	static unsigned char buf[20] = { 'B', 10};
@@ -169,6 +122,8 @@ void sendMotorState()
 	static unsigned len;
 	
 	len = 2;
+	buf[len++] = DCMOTOR_GETPOS(A) >> 24;
+	buf[len++] = DCMOTOR_GETPOS(A) >> 16;
 	buf[len++] = DCMOTOR_GETPOS(A) >> 8;
 	buf[len++] = DCMOTOR_GETPOS(A) & 255;
 	buf[len++] = digitalRead(MOTA_END) == MOTA_ENDLEVEL;
@@ -176,23 +131,14 @@ void sendMotorState()
 	buf[len++] = DCMOTOR(A).Vars.PWMFinal >> 8;
 	buf[len++] = DCMOTOR(A).Vars.PWMFinal & 255;
 	ramppos = (int)rampGetPos(&(DCMOTOR(A).PosRamp));
+	buf[len++] = ramppos >> 24;
+	buf[len++] = ramppos >> 16;
 	buf[len++] = ramppos >> 8;
 	buf[len++] = ramppos & 255;
 	buf[len++] = DCMOTOR(A).VolVars.homed;
 	buf[len++] = '\n';
 	fraiseSend(buf,len);
 }
-
-/*#define DCMOTOR_UPDATE_ASYM_PROTECT_(motID) do{ \
-	DCMOTOR_FORMATPWM(motID);\
-	if((dcmotor_v < 0) && (digitalRead(TRANS_LOSW) == TRANS_SWLEVEL)) dcmotor_v = 0; \
-	if((dcmotor_v > 0) && (digitalRead(TRANS_HISW) == TRANS_SWLEVEL)) dcmotor_v = 0; \
-	dcmotor_vabs = dcmotor_v < 0 ? 1023 + dcmotor_v : dcmotor_v; \
-	SET_PWM(MOT##motID##_PWM, dcmotor_vabs); \
-	if(dcmotor_v < 0) { digitalSet(M##motID##2);}\
-	else { digitalClear(M##motID##2);}\
- } while(0)
-#define DCMOTOR_UPDATE_ASYM_PROTECT(motID) CALL_FUN(DCMOTOR_UPDATE_ASYM_PROTECT_,motID)*/
 
 void loop() {
 	static unsigned char loopCount;
@@ -207,8 +153,7 @@ void loop() {
 		//analogSend();		// send analog channels that changed
 		//fraiseService();
 #ifdef USE_MOTORS
-		//testTransEnds();
-		DCMOTOR_COMPUTE(A, ASYM);//_PROTECT);
+		DCMOTOR_COMPUTE(A, ASYM);
 		
 		if(loopCount++ > 10) {
 			sendMotorState();
@@ -250,9 +195,6 @@ void fraiseReceive() // receive raw
 	c=fraiseGetChar();
 	
 	switch(c) {
-		//case 10 : i = fraiseGetInt(); analogWrite(PWLED1, i); break;
-		//case 11 : i = fraiseGetInt(); analogWrite(PWLED2, i); break;
-		//case 20 :  servoReceive(); break;
 #ifdef USE_MOTORS
 	    case 120 : DCMOTOR_INPUT(A) ; break;
 #endif

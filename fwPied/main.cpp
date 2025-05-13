@@ -21,39 +21,51 @@ int ledPeriod = 250;
 const int DMX_TX_PIN = 0;
 const int DMX_RX_PIN = 1;
 const int DMX_DRV_PIN = 2;
-//uart_inst_t *DMX_UART = uart0;
 #define DMX_CHAN_COUNT 512
 unsigned char dmxBuf[DMX_CHAN_COUNT];
-//DmxSlave dmx;
-
+const int FRUIT_OFFSET = 49;
 DmxInput dmxInput;
 
 bool button, button_last;
 int button_count;
 
 void send_dest(int mot, int dest) {
-    if(mot > 5) mot = 5;
-    char buf[5] = {120, 0, 10};
-    buf[3] = dest >> 8;
-    buf[4] = dest & 255;
-    fraise_master_sendbytes(49 + mot, buf, sizeof(buf));
-    /*printf("dest %d %d: %02X %02X %02X %02X %02X %02X \n", 49 + mot, dest,
-        buf[0], buf[1], buf[2], buf[3], buf[4]);*/
-    printf("dest %d %d\n", 49 + mot, dest);
+    if(mot > 6) mot = 6;
+    char buf[7] = {120, 0, 10};
+    buf[3] = dest >> 24;
+    buf[4] = dest >> 16;
+    buf[5] = dest >> 8;
+    buf[6] = dest & 255;
+    fraise_master_sendbytes(FRUIT_OFFSET + mot, buf, sizeof(buf));
+    printf("dest %d %d\n", FRUIT_OFFSET + mot, dest);
+}
+
+void set_pos(int mot, int pos) {
+    if(mot > 6) mot = 6;
+    char buf[10];
+    int len = 0;
+    buf[len++] = 120;
+    buf[len++] = 7;
+    buf[len++] = pos >> 24;
+    buf[len++] = pos >> 16;
+    buf[len++] = pos >> 8;
+    buf[len++] = pos & 255;
+    fraise_master_sendbytes(FRUIT_OFFSET + mot, buf, len);
+    printf("pos %d %d\n", FRUIT_OFFSET + mot, pos);
 }
 
 void send_pwm(int mot, int pwm) {
-    if(mot > 5) mot = 5;
+    if(mot > 6) mot = 6;
     if(pwm < -1023) pwm = -1023;
     else if(pwm > 1023) pwm = 1023;
 
     char buf[4] = {120, 4};
     buf[2] = pwm >> 8;
     buf[3] = pwm & 255;
-    fraise_master_sendbytes(49 + mot, buf, sizeof(buf));
-    /*printf("dest %d %d: %02X %02X %02X %02X %02X %02X \n", 49 + mot, dest,
+    fraise_master_sendbytes(FRUIT_OFFSET + mot, buf, sizeof(buf));
+    /*printf("dest %d %d: %02X %02X %02X %02X %02X %02X \n", FRUIT_OFFSET + mot, dest,
         buf[0], buf[1], buf[2], buf[3], buf[4]);*/
-    printf("pwm %d %d %d %d\n", 49 + mot, pwm, buf[2], buf[3]); // -1023 = FC01
+    printf("pwm %d %d %d %d\n", FRUIT_OFFSET + mot, pwm, buf[2], buf[3]); // -1023 = FC01
 }
 
 class Perche {
@@ -61,16 +73,20 @@ class Perche {
     int32_t position = 0;
     int32_t last_pos = 0;
     int32_t destination = 0;
-    uint16_t speed = 1;
+    int16_t speed = 1;
     uint16_t channel;
+    uint16_t set_channel;
     std::vector<uint8_t> motors;
     bool running = false;
+    bool setting_changed = true;
 
     public:
     static const int NB_CHANS = 4;
-    static const int POSITION_MAX = 6 * 250 / 0.15; // 6 meters, 250 step/tour, 15 cm/tour
-    static const int SPEED_MAX = 250;
-    Perche(std::vector<uint8_t> motors, uint16_t channel): channel(channel), motors(motors) {}
+    static const int POSITION_MAX = 6 * 250 / 0.22; // 6 meters, 250 step/tour, 22 cm/tour
+    static const int POSITION_MIN = 100;
+    static const int SPEED_MAX = 650;//250;
+    Perche(std::vector<uint8_t> motors, uint16_t channel, uint16_t set_channel): 
+      channel(channel), set_channel(set_channel), motors(motors) {}
 
     void set_destination(int32_t dest) {
         destination = dest * 256;
@@ -82,24 +98,56 @@ class Perche {
         //if(speed == 0) speed = 1;
     }
 
-    void parse_dmx() {
+    void stop() {
+        for(auto m: motors) {
+            send_pwm(m, 0);
+        }
+        position = destination;
+        running = false;
+        printf("channel %d stop\n", channel);
+    }
+
+    void reset_positions() {
+        for(auto m: motors) {
+            send_pwm(m, 0);
+            set_pos(m, POSITION_MAX);
+        }
+        set_destination(POSITION_MAX);
+        stop();
+        printf("channel %d reset pos %d dest %d\n", channel, position / 256, destination / 256);
+    }
+    
+    void parse_dmx_setting() {
         static const int deadzone = 55;
-        uint8_t dmx_dest    = dmxBuf[config.dmx_start + channel + 0];
-        uint8_t dmx_speed   = dmxBuf[config.dmx_start + channel + 1];
-        int dmx_rewind      = MAX(dmxBuf[config.dmx_start + channel + 2] - deadzone, 0);
-        int dmx_fastfw      = MAX(dmxBuf[config.dmx_start + channel + 3] - deadzone, 0);
-        if(dmx_rewind > 0 || dmx_fastfw > 0) {
-            int pwm = ((dmx_fastfw - dmx_rewind) * 1023) / (255 - deadzone);
-            for(auto m: motors) send_pwm(m, pwm);
-            running = false;
-        } else {
-            if(!running) {
-                last_pos = -1;
-                for(auto m: motors) send_pwm(m, 0);
+        //stop();
+        for(int i = 0; i < (int)motors.size(); i++) {
+            int dmx_rewind      = (int)dmxBuf[config.dmx_set_start + set_channel + i * 2 + 0];
+            int dmx_fastfw      = (int)dmxBuf[config.dmx_set_start + set_channel + i * 2 + 1];
+            int dz_rewind      = MAX(dmx_rewind - deadzone, 0);
+            int dz_fastfw      = MAX(dmx_fastfw - deadzone, 0);
+            int pwm = ((dz_fastfw - dz_rewind) * 1023) / (255 - deadzone);
+            send_pwm(motors[i], pwm);
+            if(dz_rewind > 0 || dz_fastfw > 0) {
+                setting_changed = true;
             }
+        }
+        running = false;
+    }
+
+    void parse_dmx_use() {
+        int dmx_dest    = dmxBuf[config.dmx_start + channel + 0];
+        int dmx_speed   = dmxBuf[config.dmx_start + channel + 1];
+        if(setting_changed) {
+            if(dmx_dest != 0) return;
+            reset_positions();
+            setting_changed = false;
+        }
+        if(!running) {
+            if(dmx_dest != 0) return;
             running = true;
         }
-        set_destination((dmx_dest * POSITION_MAX) / 255);
+        int new_dest = POSITION_MAX - (dmx_dest * (POSITION_MAX - POSITION_MIN)) / 255;
+        set_destination(new_dest);
         set_speed((dmx_speed * SPEED_MAX) / 255);
     }
 
@@ -126,27 +174,41 @@ class Perche {
 Perche pB({2, 3}, Perche::NB_CHANS);
 Perche pC({5}, Perche::NB_CHANS * 2);*/
 
-Perche pA({1, 3}, 0);
-Perche pB({2, 4}, Perche::NB_CHANS);
+Perche pA({1, 3}, 0, 0);
+Perche pB({2, 4}, 2, 4);
 //Perche pC({/*4, */5}, Perche::NB_CHANS * 2);
 
 std::vector<Perche*> perches{&pA, &pB};
+
+void parse_dmx_global() {
+    int lock_val = dmxBuf[config.dmx_set_unlock];
+    enum State {USE, STOP, SETTING} state;
+    static State old_state = USE;    
+    if(lock_val < 10) state = USE;
+    else if(lock_val > 245) state = SETTING;
+    else state = STOP;
+    
+    switch(state) {
+        case USE: for(auto p: perches) p->parse_dmx_use(); break;
+        case SETTING: for(auto p: perches) p->parse_dmx_setting(); break;
+        default: ;
+    }
+    if((old_state != state) && (state == STOP)) for(auto p: perches) p->stop();
+    old_state = state;
+}
+
+bool dmxRcvd = false;
 
 void __isr dmxDataRecevied(DmxInput* instance) {
      // A DMX frame has been received :-)
      // Toggle some LED, depending on which pin the data arrived
      gpio_put(LED_PIN, !gpio_get(LED_PIN));
-     for(auto p: perches) p->parse_dmx();
+     dmxRcvd = true;
+     //for(auto p: perches) p->parse_dmx();
 }
 
 void setup() {
     eeprom_load();
-
-    /*gpio_init(BUTTON_PIN);
-    gpio_set_dir(BUTTON_PIN, GPIO_IN);
-    gpio_pull_up(BUTTON_PIN);*/
-
-    //dmx.init(DMX_UART, DMX_TX_PIN, DMX_RX_PIN);
     gpio_init(DMX_DRV_PIN);
     gpio_set_dir(DMX_DRV_PIN, GPIO_OUT);
     gpio_put(DMX_DRV_PIN, 1);
@@ -170,23 +232,10 @@ void loop() {
         for(auto p: perches) p->update();
     }
 
-    /*if(gpio_get(BUTTON_PIN)) {
-        if(button_count > 0) button_count--;
-        else button = false;
-    } else {
-        if(button_count < 1000) button_count++;
-        else button = true;
+    if(dmxRcvd) {
+        dmxRcvd = false;
+        parse_dmx_global();
     }
-    if(button_last != button) {
-        button_last = button;
-        printf("b %d\n", button);
-        if(button) {
-        }
-    }*/
-
-    /*if(dmx.transfer_finished()) {
-        dmx.transfer_frame(dmxBuf, DMX_CHAN_COUNT);
-    }*/
     watchdog_update();
 }
 

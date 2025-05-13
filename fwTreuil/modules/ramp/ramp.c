@@ -178,9 +178,9 @@ void rampInput(t_ramp *Ramp)
 		fraiseSendCopy();
 		c2=fraiseGetChar();
 		switch(c2) {
-			GETPARAM(0, Ramp->maxSpeed, i);
-			GETPARAM(1, Ramp->maxAccel, i);
-			GETPARAM(2, Ramp->maxDecel, i);
+			GETPARAM(0, Ramp->maxSpeed, l);
+			GETPARAM(1, Ramp->maxAccel, l);
+			GETPARAM(2, Ramp->maxDecel, l);
 			GETPARAM(10, Ramp->destPos, l);
 			GETPARAM(11, rampGetPos(Ramp), l);
 			GETPARAM(13, Ramp->length, l);

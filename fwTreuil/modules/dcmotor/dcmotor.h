@@ -109,8 +109,8 @@ extern t_dcmotorVolVars dcmotorVolVars;
 #define DCMOTOR_CAPTURE_SERVICE_(motID) do{ 						\
 	dcmotor##motID.Incr.incA = digitalRead(MOT##motID##_A); 		\
 	if(digitalRead(MOT##motID##_END) == MOT##motID##_ENDLEVEL) { 	\
-		dcmotor##motID.VolVars.Position = 0; 						\
-		dcmotor##motID.VolVars.homed = 1;							\
+		/*dcmotor##motID.VolVars.Position = 0; */						\
+		/*dcmotor##motID.VolVars.homed = 1;*/							\
 		dcmotor##motID.VolVars.end = 1;								\
 	}	else dcmotor##motID.VolVars.end = 0;						\
 	if(dcmotor##motID.Incr.incA != dcmotor##motID.Incr.lastA) { 	\

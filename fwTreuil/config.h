@@ -6,7 +6,7 @@
 #define RAMP_UINCPOW 8 // 1 increment = 1024 milli-increments (mincs) = 1024x1024 micro-increments (uincs)
 #define RAMP_VPOW 8
 #define RAMP_TO_POS_POW (RAMP_UINCPOW - 4)
-#define RAMP_MAXERROR 4 //  
+#define RAMP_MAXERROR 1 //  
 
 // rotation motor:
 #define MOTA_END K3

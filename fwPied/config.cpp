@@ -13,14 +13,17 @@ void Config::eeprom_declare() {
 void Config::receivebytes(const char* data, uint8_t len) {
     char command = fraise_get_uint8();
     switch(command) {
-    case 1: {
+    case 1: 
         dmx_start = fraise_get_uint16();
-    }
-    break;
+        dmx_set_start = fraise_get_uint16();
+        dmx_set_unlock = fraise_get_uint16();
+        break;
     case 101:
         fraise_put_init();
         fraise_put_uint8(200);
         fraise_put_uint16(dmx_start);
+        fraise_put_uint16(dmx_set_start);
+        fraise_put_uint16(dmx_set_unlock);
         fraise_put_send();
         break;
     }
